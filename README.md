@@ -6,4 +6,4 @@ Yet Another Chat Playground for Large Language Models.
 
 streamlit run webui.py
 
-![demo.git](./docs/demo.gif)
+https://github.com/upbit/StreamChatPlayground/assets/302680/561c4d3c-d498-4338-9f98-7f4564abc7a2
