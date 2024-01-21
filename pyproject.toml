@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "chat-playground"
+version = "0.1.0"
+description = ""
+authors = ["Hao Zhou <rmusique@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">3.9.7,<4.0"
+streamlit = "^1.30.0"
+zhipuai = "^2.0.1"
+python-dotenv = "^1.0.0"
+openai = "^1.8.0"
+langchain = "^0.1.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
