@@ -7,7 +7,7 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
-from langchain.schema import AgentAction, AgentFinish
+from langchain.schema import AgentAction, AgentFinish, LLMResult
 from chat_playground import *
 
 
@@ -74,10 +74,10 @@ def main():
     cfg = init_config()
 
     st.title("Chat Playground")
-    # st.markdown(
-    #     "<sub>Code Interpreter 使用 jupyter kernel 执行代码，请确认执行环境安全后再与大模型交互</sub>",
-    #     unsafe_allow_html=True,
-    # )
+    st.markdown(
+        "<sub>一个流式LLM对话应用调试WebUI，使用 Streamlit和LangChain 作为底层库</sub>",
+        unsafe_allow_html=True,
+    )
 
     with st.sidebar:
         temperature = st.slider("temperature", 0.0, 1.5, 0.9, step=0.01)
@@ -99,7 +99,7 @@ def main():
         if cfg.get("openai"):
             models.append(ModelType.OpenAI)
         if len(models) == 0:
-            st.error("没有找到可用的API，请至少配置 ZHIPUAI_API_KEY/OPENAI_API_KEY 的其中一项")
+            st.error("没有找到可用的API，请至少配置 ZHIPUAI_API_KEY / OPENAI_API_KEY 的其中一项")
             st.stop()
         model_type = st.selectbox("LLM", models)
     with model_cols[1]:
@@ -129,7 +129,7 @@ def main():
         result = run_chat(
             llm=llm,
             messages=st.session_state.messages + [user_message],
-            st_callback=StreamlitCallbackHandler(st.container()),
+            st_callback=StreamSpeakCallbackHandler(st.container()),
         )
         st.session_state.messages.append(result.message)
 

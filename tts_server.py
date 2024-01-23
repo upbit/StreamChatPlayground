@@ -11,7 +11,9 @@ from feature_extractor import cnhubert
 from module.models import SynthesizerTrn
 from my_utils import load_audio
 from module.mel_processing import spectrogram_torch
+from flask import Flask, request, Response, redirect
 
+app = Flask(__name__)
 # Command line arguments parse by parse_argument()
 configs: Namespace = None
 model_mappings: Dict[str, Any] = {}
@@ -139,7 +141,11 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
 
         # audio = vq_model.decode(pred_semantic, all_phoneme_ids, refer).detach().cpu().numpy()[0, 0]
         audio = (
-            vq_model.decode(pred_semantic, torch.LongTensor(phones2).to(configs.device).unsqueeze(0), refer)
+            vq_model.decode(
+                pred_semantic,
+                torch.LongTensor(phones2).to(configs.device).unsqueeze(0),
+                refer,
+            )
             .detach()
             .cpu()
             .numpy()[0, 0]
@@ -147,7 +153,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
         audio_opt.append(audio)
         audio_opt.append(zero_wav)
 
-    yield hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(np.int16)
+    return hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(np.int16)
 
 
 class DictToAttrRecursive(dict):
@@ -219,6 +225,7 @@ def load_models():
     # GPT
     dict_s1 = torch.load(configs.gpt, map_location="cpu")
     config = dict_s1["config"]
+    print(config)
     t2s_model = Text2SemanticLightningModule(config, "ojbk", is_train=False)
     t2s_model.load_state_dict(dict_s1["weight"])
     t2s_model = to_device(t2s_model)
@@ -253,13 +260,15 @@ def load_configs():
     parser.add_argument(
         "--sovits",
         type=str,
-        default="pretrained_models/s2G488k.pth",
+        # default="pretrained_models/s2G488k.pth",
+        default="my_models/xiaowu_e12_s84.pth",
         help="Path to the pretrained SoVITS",
     )
     parser.add_argument(
         "--gpt",
         type=str,
-        default="pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt",
+        # default="pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt",
+        default="my_models/xiaowu-e15.ckpt",
         help="Path to the pretrained GPT",
     )
 
@@ -278,37 +287,40 @@ def load_configs():
         os._exit(e.code)
 
 
+def load_text(filename):
+    with open(filename, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@app.route("/")
 def main():
-    load_configs()
-    load_models()
+    text = request.args.get("text", type=str)
+    if not text:
+        return Response("Param `text` is required", 400)
 
-    import gradio as gr
+    # TODO: change to params
+    ref_wav_path = "D:\Software\StreamChatPlayground\Characters\XiaoWu\sample.wav"
+    ref_text = load_text("D:\Software\StreamChatPlayground\Characters\XiaoWu\sample.txt")
+    lang_tag = "中文"
+    rate, adata = inference(ref_wav_path, ref_text, lang_tag, text, lang_tag)
+    scaled = np.int16(adata / np.max(np.abs(adata)) * 32767)
 
-    with gr.Blocks(title="GPT-SoVITS WebUI") as app:
-        with gr.Group():
-            gr.Markdown(value="*请上传并填写参考信息")
-            with gr.Row():
-                inp_ref = gr.Audio(label="请上传参考音频", type="filepath")
-                prompt_text = gr.Textbox(label="参考音频的文本", value="大家好，我是小舞，跳舞的舞。")
-                prompt_language = gr.Dropdown(label="参考音频的语种", choices=["中文", "英文", "日文"], value="中文")
-            gr.Markdown(value="*请填写需要合成的目标文本")
-            with gr.Row():
-                text = gr.Textbox(label="需要合成的文本", value="从前有一个包子，他早上没吃早饭就去上学了。路上走着走着，实在饿的不行，就把自己吃了。")
-                text_language = gr.Dropdown(label="需要合成的语种", choices=["中文", "英文", "日文"], value="中文")
-                inference_button = gr.Button("合成语音", variant="primary")
-                output = gr.Audio(label="输出的语音")
-            inference_button.click(
-                inference,
-                [inp_ref, prompt_text, prompt_language, text, text_language],
-                [output],
-            )
+    from scipy.io.wavfile import write
 
-    app.queue(concurrency_count=3, max_size=1022).launch(
-        server_name="127.0.0.1",
-        inbrowser=True,
-        quiet=True,
-    )
+    write("temp.wav", rate, scaled)
+
+    def generate():
+        with open("temp.wav", "rb") as fwav:
+            data = fwav.read(4096)
+            while data:
+                yield data
+                data = fwav.read(4096)
+
+    return Response(generate(), mimetype="audio/x-wav")
 
 
 if __name__ == "__main__":
-    main()
+    # TODO: multithreads
+    load_configs()
+    load_models()
+    app.run(host="127.0.0.1", debug=True)
