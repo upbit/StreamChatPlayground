@@ -30,20 +30,22 @@ class StreamSpeakCallbackHandler(StreamlitCallbackHandler):
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         self._require_current_thought().on_llm_end(response, **kwargs)
 
-        if (self.new_sentence) > 4:
-            self.call_tts(self.new_sentence)
-            self.new_sentence = ""
-
     def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
         self._require_current_thought().on_llm_new_token(token, **kwargs)
 
         self.new_sentence += token
         # Check if the new token forms a sentence.
         if token in ".:!?。：！？\n" and len(self.new_sentence) > 4:
-            self.call_tts(self.new_sentence)
-            self.new_sentence = ""
+            try:
+                self.call_tts(self.new_sentence)
+            finally:
+                self.new_sentence = ""
 
     def call_tts(self, text: str):
         r = requests.get(f"http://127.0.0.1:5000/?text={text}", stream=True)
         print(r.status_code, text)
-        self._container.write(st.audio(r.content, format="audio/wav"))
+        cols = st.columns([0.7, 0.3])
+        with cols[0]:
+            st.write(text)
+        with cols[1]:
+            st.write(st.audio(r.content, format="audio/wav"))
