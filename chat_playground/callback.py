@@ -1,5 +1,7 @@
 import base64
 import librosa
+import requests
+import streamlit as st
 from typing import Any, Optional
 from langchain.schema import LLMResult
 from streamlit.external.langchain import StreamlitCallbackHandler, LLMThoughtLabeler
@@ -23,14 +25,25 @@ class StreamSpeakCallbackHandler(StreamlitCallbackHandler):
             collapse_completed_thoughts=collapse_completed_thoughts,
             thought_labeler=thought_labeler,
         )
-        self.container = parent_container
         self.new_sentence = ""
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         self._require_current_thought().on_llm_end(response, **kwargs)
 
-    # def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
-    #     self._require_current_thought().on_llm_new_token(token, **kwargs)
-    #     self.new_sentence += token
-    #     # Check if the new token forms a sentence.
-    #     if token in ".:!?。：！？\n":
+        if (self.new_sentence) > 4:
+            self.call_tts(self.new_sentence)
+            self.new_sentence = ""
+
+    def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
+        self._require_current_thought().on_llm_new_token(token, **kwargs)
+
+        self.new_sentence += token
+        # Check if the new token forms a sentence.
+        if token in ".:!?。：！？\n" and len(self.new_sentence) > 4:
+            self.call_tts(self.new_sentence)
+            self.new_sentence = ""
+
+    def call_tts(self, text: str):
+        r = requests.get(f"http://127.0.0.1:5000/?text={text}", stream=True)
+        print(r.status_code, text)
+        self._container.write(st.audio(r.content, format="audio/wav"))

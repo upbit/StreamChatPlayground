@@ -1,3 +1,4 @@
+import re
 import torch
 import librosa
 import numpy as np
@@ -12,11 +13,29 @@ from module.models import SynthesizerTrn
 from my_utils import load_audio
 from module.mel_processing import spectrogram_torch
 from flask import Flask, request, Response, redirect
+from pprint import pprint
+
 
 app = Flask(__name__)
 # Command line arguments parse by parse_argument()
 configs: Namespace = None
 model_mappings: Dict[str, Any] = {}
+
+splits_flags = {
+    "，",
+    "。",
+    "？",
+    "！",
+    ",",
+    ".",
+    "?",
+    "!",
+    "~",
+    ":",
+    "：",
+    "—",
+    "…",
+}  # 不考虑省略号
 
 
 def to_device(model, device=None):
@@ -70,50 +89,65 @@ def get_spepc(hps, filename):
 def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
     global configs, model_mappings
 
+    hps = model_mappings["hps"]
     prompt_text = prompt_text.strip("\n")
     prompt_language, text = prompt_language, text.strip("\n")
+    zero_wav = np.zeros(
+        int(hps.data.sampling_rate * 0.3),
+        dtype=np.float16 if configs.half == True else np.float32,
+    )
     with torch.no_grad():
         wav16k, sr = librosa.load(ref_wav_path, sr=16000)
         wav16k = to_device(torch.from_numpy(wav16k))
+        zero_wav_torch = to_device(torch.from_numpy(zero_wav))
+        wav16k = torch.cat([wav16k, zero_wav_torch])
 
         ssl_model = model_mappings["ssl_model"]
-        ssl_content = ssl_model.model(wav16k.unsqueeze(0))["last_hidden_state"].transpose(1, 2)
+        ssl_content = ssl_model.model(wav16k.unsqueeze(0))[
+            "last_hidden_state"
+        ].transpose(1, 2)
         vq_model = model_mappings["vq_model"]
         codes = vq_model.extract_latent(ssl_content)
         prompt_semantic = codes[0, 0]
 
     # step1
-    dict_language = {"中文": "zh", "英文": "en", "日文": "ja"}
+    if prompt_language == "en":
+        phones1, word2ph1, norm_text1 = clean_text_inf(prompt_text, prompt_language)
+    else:
+        phones1, word2ph1, norm_text1 = nonen_clean_text_inf(
+            prompt_text, prompt_language
+        )
 
-    prompt_language = dict_language[prompt_language]
-    text_language = dict_language[text_language]
-    phones1, word2ph1, norm_text1 = clean_text(prompt_text, prompt_language)
-    phones1 = cleaned_text_to_sequence(phones1)
+    text = text.replace("\n\n", "\n").replace("\n\n", "\n").replace("\n\n", "\n")
+    if text[-1] not in splits_flags:
+        text += "。" if text_language != "en" else "."
     texts = text.split("\n")
+    pprint(texts)
 
-    hps = model_mappings["hps"]
     audio_opt = []
-    zero_wav = np.zeros(
-        int(hps.data.sampling_rate * 0.3),
-        dtype=np.float16 if configs.half else np.float32,
-    )
+    if prompt_language == "en":
+        bert1 = get_bert_inf(phones1, word2ph1, norm_text1, prompt_language)
+    else:
+        bert1 = nonen_get_bert_inf(prompt_text, prompt_language)
+
     for text in texts:
-        phones2, word2ph2, norm_text2 = clean_text(text, text_language)
-        phones2 = cleaned_text_to_sequence(phones2)
-        if prompt_language == "zh":
-            bert1 = get_bert_feature(norm_text1, word2ph1).to(configs.device)
+        if len(text.strip()) == 0:
+            continue
+        if text_language == "en":
+            phones2, word2ph2, norm_text2 = clean_text_inf(text, text_language)
         else:
-            bert1 = torch.zeros(
-                (1024, len(phones1)),
-                dtype=torch.float16 if configs.half else torch.float32,
-            ).to(configs.device)
-        if text_language == "zh":
-            bert2 = get_bert_feature(norm_text2, word2ph2).to(configs.device)
+            phones2, word2ph2, norm_text2 = nonen_clean_text_inf(text, text_language)
+
+        if text_language == "en":
+            bert2 = get_bert_inf(phones2, word2ph2, norm_text2, text_language)
         else:
-            bert2 = torch.zeros((1024, len(phones2))).to(bert1)
+            bert2 = nonen_get_bert_inf(text, text_language)
+
         bert = torch.cat([bert1, bert2], 1)
 
-        all_phoneme_ids = torch.LongTensor(phones1 + phones2).to(configs.device).unsqueeze(0)
+        all_phoneme_ids = (
+            torch.LongTensor(phones1 + phones2).to(configs.device).unsqueeze(0)
+        )
         bert = bert.to(configs.device).unsqueeze(0)
         all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(configs.device)
         prompt = prompt_semantic.unsqueeze(0).to(configs.device)
@@ -135,7 +169,9 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
             )
 
         # step3
-        pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)  # .unsqueeze(0) #mq要多unsqueeze一次
+        pred_semantic = pred_semantic[:, -idx:].unsqueeze(
+            0
+        )  # .unsqueeze(0) #mq要多unsqueeze一次
         refer = get_spepc(hps, ref_wav_path)
         refer = to_device(refer)
 
@@ -153,7 +189,87 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
         audio_opt.append(audio)
         audio_opt.append(zero_wav)
 
-    return hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(np.int16)
+    return hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(
+        np.int16
+    )
+
+
+def splite_en_inf(sentence, language):
+    pattern = re.compile(r"[a-zA-Z. ]+")
+    textlist = []
+    langlist = []
+    pos = 0
+    for match in pattern.finditer(sentence):
+        start, end = match.span()
+        if start > pos:
+            textlist.append(sentence[pos:start])
+            langlist.append(language)
+        textlist.append(sentence[start:end])
+        langlist.append("en")
+        pos = end
+    if pos < len(sentence):
+        textlist.append(sentence[pos:])
+        langlist.append(language)
+
+    return textlist, langlist
+
+
+def clean_text_inf(text, language):
+    phones, word2ph, norm_text = clean_text(text, language)
+    phones = cleaned_text_to_sequence(phones)
+
+    return phones, word2ph, norm_text
+
+
+def get_bert_inf(phones, word2ph, norm_text, language):
+    global configs
+    if language == "zh":
+        bert = get_bert_feature(norm_text, word2ph).to(configs.device)
+    else:
+        bert = torch.zeros(
+            (1024, len(phones)),
+            dtype=torch.float16 if configs.half == True else torch.float32,
+        ).to(configs.device)
+
+    return bert
+
+
+def nonen_clean_text_inf(text, language):
+    textlist, langlist = splite_en_inf(text, language)
+    phones_list = []
+    word2ph_list = []
+    norm_text_list = []
+    for i in range(len(textlist)):
+        lang = langlist[i]
+        phones, word2ph, norm_text = clean_text_inf(textlist[i], lang)
+        phones_list.append(phones)
+        if lang == "en" or "ja":
+            pass
+        else:
+            word2ph_list.append(word2ph)
+        norm_text_list.append(norm_text)
+    print(word2ph_list)
+    phones = sum(phones_list, [])
+    word2ph = sum(word2ph_list, [])
+    norm_text = " ".join(norm_text_list)
+
+    return phones, word2ph, norm_text
+
+
+def nonen_get_bert_inf(text, language):
+    textlist, langlist = splite_en_inf(text, language)
+    print(textlist)
+    print(langlist)
+    bert_list = []
+    for i in range(len(textlist)):
+        text = textlist[i]
+        lang = langlist[i]
+        phones, word2ph, norm_text = clean_text_inf(text, lang)
+        bert = get_bert_inf(phones, word2ph, norm_text, lang)
+        bert_list.append(bert)
+    bert = torch.cat(bert_list, dim=1)
+
+    return bert
 
 
 class DictToAttrRecursive(dict):
@@ -261,19 +377,21 @@ def load_configs():
         "--sovits",
         type=str,
         # default="pretrained_models/s2G488k.pth",
-        default="my_models/xiaowu_e12_s84.pth",
+        default="my_models/xiaowu_e12_s108.pth",
         help="Path to the pretrained SoVITS",
     )
     parser.add_argument(
         "--gpt",
         type=str,
         # default="pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt",
-        default="my_models/xiaowu-e15.ckpt",
+        default="my_models/xiaowu-e10.ckpt",
         help="Path to the pretrained GPT",
     )
 
     parser.add_argument("--device", type=str, default="cuda", help="Device to run on")
-    parser.add_argument("--half", action="store_true", help="Use half precision instead of float32")
+    parser.add_argument(
+        "--half", action="store_true", help="Use half precision instead of float32"
+    )
 
     global configs
     try:
@@ -297,12 +415,21 @@ def main():
     text = request.args.get("text", type=str)
     if not text:
         return Response("Param `text` is required", 400)
+    text_lang = request.args.get("lang", type=str, default="zh")  # zh, en, jp
 
     # TODO: change to params
-    ref_wav_path = "D:\Software\StreamChatPlayground\Characters\XiaoWu\sample.wav"
-    ref_text = load_text("D:\Software\StreamChatPlayground\Characters\XiaoWu\sample.txt")
-    lang_tag = "中文"
-    rate, adata = inference(ref_wav_path, ref_text, lang_tag, text, lang_tag)
+    ref_wav_path = "my_models/sample.wav"
+    raw_text = load_text("my_models/sample.txt")
+    lang_tag, ref_text = raw_text.split("|")
+    params = {
+        "ref_wav_path": ref_wav_path,
+        "prompt_text": ref_text,
+        "prompt_language": lang_tag,
+        "text": text,
+        "text_language": text_lang,
+    }
+    pprint(params)
+    rate, adata = inference(**params)
     scaled = np.int16(adata / np.max(np.abs(adata)) * 32767)
 
     from scipy.io.wavfile import write
