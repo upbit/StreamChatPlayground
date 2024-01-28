@@ -1,5 +1,6 @@
 import re
 import torch
+import struct
 import librosa
 import numpy as np
 from typing import Dict, Any
@@ -103,9 +104,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
         wav16k = torch.cat([wav16k, zero_wav_torch])
 
         ssl_model = model_mappings["ssl_model"]
-        ssl_content = ssl_model.model(wav16k.unsqueeze(0))[
-            "last_hidden_state"
-        ].transpose(1, 2)
+        ssl_content = ssl_model.model(wav16k.unsqueeze(0))["last_hidden_state"].transpose(1, 2)
         vq_model = model_mappings["vq_model"]
         codes = vq_model.extract_latent(ssl_content)
         prompt_semantic = codes[0, 0]
@@ -114,9 +113,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
     if prompt_language == "en":
         phones1, word2ph1, norm_text1 = clean_text_inf(prompt_text, prompt_language)
     else:
-        phones1, word2ph1, norm_text1 = nonen_clean_text_inf(
-            prompt_text, prompt_language
-        )
+        phones1, word2ph1, norm_text1 = nonen_clean_text_inf(prompt_text, prompt_language)
 
     text = text.replace("\n\n", "\n").replace("\n\n", "\n").replace("\n\n", "\n")
     if text[-1] not in splits_flags:
@@ -145,9 +142,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
 
         bert = torch.cat([bert1, bert2], 1)
 
-        all_phoneme_ids = (
-            torch.LongTensor(phones1 + phones2).to(configs.device).unsqueeze(0)
-        )
+        all_phoneme_ids = torch.LongTensor(phones1 + phones2).to(configs.device).unsqueeze(0)
         bert = bert.to(configs.device).unsqueeze(0)
         all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(configs.device)
         prompt = prompt_semantic.unsqueeze(0).to(configs.device)
@@ -169,9 +164,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
             )
 
         # step3
-        pred_semantic = pred_semantic[:, -idx:].unsqueeze(
-            0
-        )  # .unsqueeze(0) #mq要多unsqueeze一次
+        pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)  # .unsqueeze(0) #mq要多unsqueeze一次
         refer = get_spepc(hps, ref_wav_path)
         refer = to_device(refer)
 
@@ -189,9 +182,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
         audio_opt.append(audio)
         audio_opt.append(zero_wav)
 
-    return hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(
-        np.int16
-    )
+    return hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(np.int16)
 
 
 def splite_en_inf(sentence, language):
@@ -389,9 +380,7 @@ def load_configs():
     )
 
     parser.add_argument("--device", type=str, default="cuda", help="Device to run on")
-    parser.add_argument(
-        "--half", action="store_true", help="Use half precision instead of float32"
-    )
+    parser.add_argument("--half", action="store_true", help="Use half precision instead of float32")
 
     global configs
     try:
@@ -403,6 +392,35 @@ def load_configs():
         import os
 
         os._exit(e.code)
+
+
+def pcm16_header(rate, data):
+    # Header for 16-bit PCM, modify from scipy.io.wavfile.write
+    fs = rate
+    size = data.nbytes  # length * sizeof(nint16)
+
+    header_data = b"RIFF"
+    header_data += struct.pack("i", size + 44)
+    header_data += b"WAVE"
+
+    # fmt chunk
+    header_data += b"fmt "
+    format_tag = 1  # PCM
+    if data.ndim == 1:
+        channels = 1
+    else:
+        channels = data.shape[1]
+    bit_depth = data.dtype.itemsize * 8
+    bytes_per_second = fs * (bit_depth // 8) * channels
+    block_align = channels * (bit_depth // 8)
+    fmt_chunk_data = struct.pack("<HHIIHH", format_tag, channels, fs, bytes_per_second, block_align, bit_depth)
+
+    header_data += struct.pack("<I", len(fmt_chunk_data))
+    header_data += fmt_chunk_data
+
+    header_data += b"data"
+
+    return header_data + struct.pack("<I", size)
 
 
 def load_text(filename):
@@ -429,25 +447,17 @@ def main():
         "text_language": text_lang,
     }
     pprint(params)
-    rate, adata = inference(**params)
-    scaled = np.int16(adata / np.max(np.abs(adata)) * 32767)
-
-    from scipy.io.wavfile import write
-
-    write("temp.wav", rate, scaled)
 
     def generate():
-        with open("temp.wav", "rb") as fwav:
-            data = fwav.read(4096)
-            while data:
-                yield data
-                data = fwav.read(4096)
+        rate, adata = inference(**params)
+        scaled_data = np.int16(adata / np.max(np.abs(adata)) * 32767)
+        yield pcm16_header(rate, scaled_data)
+        yield scaled_data.tobytes()
 
-    return Response(generate(), mimetype="audio/x-wav")
+    return generate(), {"Content-Type": "audio/x-wav"}
 
 
 if __name__ == "__main__":
-    # TODO: multithreads
     load_configs()
     load_models()
     app.run(host="127.0.0.1", debug=True)
