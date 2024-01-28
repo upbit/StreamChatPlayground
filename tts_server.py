@@ -91,6 +91,10 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
     global configs, model_mappings
 
     hps = model_mappings["hps"]
+
+    # 先返回PCM的头部，将音频长度设置成较大的值以便后面分块发送音频数据
+    yield pcm16_header(hps.data.sampling_rate)
+
     prompt_text = prompt_text.strip("\n")
     prompt_language, text = prompt_language, text.strip("\n")
     zero_wav = np.zeros(
@@ -121,7 +125,7 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
     texts = text.split("\n")
     pprint(texts)
 
-    audio_opt = []
+    # audio_opt = []
     if prompt_language == "en":
         bert1 = get_bert_inf(phones1, word2ph1, norm_text1, prompt_language)
     else:
@@ -179,10 +183,9 @@ def inference(ref_wav_path, prompt_text, prompt_language, text, text_language):
             .cpu()
             .numpy()[0, 0]
         )  ###试试重建不带上prompt部分
-        audio_opt.append(audio)
-        audio_opt.append(zero_wav)
 
-    return hps.data.sampling_rate, (np.concatenate(audio_opt, 0) * 32768).astype(np.int16)
+        audio_raw = (np.concatenate([audio, zero_wav], 0) * 32768).astype(np.int16)
+        yield np.int16(audio_raw / np.max(np.abs(audio_raw)) * 32767).tobytes()
 
 
 def splite_en_inf(sentence, language):
@@ -239,7 +242,7 @@ def nonen_clean_text_inf(text, language):
         else:
             word2ph_list.append(word2ph)
         norm_text_list.append(norm_text)
-    print(word2ph_list)
+    # print(word2ph_list)
     phones = sum(phones_list, [])
     word2ph = sum(word2ph_list, [])
     norm_text = " ".join(norm_text_list)
@@ -249,8 +252,8 @@ def nonen_clean_text_inf(text, language):
 
 def nonen_get_bert_inf(text, language):
     textlist, langlist = splite_en_inf(text, language)
-    print(textlist)
-    print(langlist)
+    # print(textlist)
+    # print(langlist)
     bert_list = []
     for i in range(len(textlist)):
         text = textlist[i]
@@ -294,27 +297,20 @@ class DictToAttrRecursive(dict):
 def load_models():
     global configs, model_mappings
 
-    import tqdm
-
-    bar = tqdm.tqdm(total=5)
-
     # BERT
     tokenizer = AutoTokenizer.from_pretrained(configs.bert)
     model = AutoModelForMaskedLM.from_pretrained(configs.bert)
     model_mappings["bert"] = {"tokenizer": tokenizer, "model": to_device(model)}
-    bar.update(1)
 
     # HuBERT
     cnhubert.cnhubert_base_path = configs.hubert
     model_mappings["ssl_model"] = to_device(cnhubert.get_model())
-    bar.update(2)
 
     # SoVITS
     dict_s2 = torch.load(configs.sovits, map_location="cpu")
     hps = DictToAttrRecursive(dict_s2["config"])
     hps.model.semantic_frame_rate = "25hz"
     model_mappings["hps"] = hps
-    bar.update(3)
 
     # VQ
     vq_model = SynthesizerTrn(
@@ -327,7 +323,6 @@ def load_models():
     vq_model.eval()
     model_mappings["vq_model"] = vq_model
     print(vq_model.load_state_dict(dict_s2["weight"], strict=False))
-    bar.update(4)
 
     # GPT
     dict_s1 = torch.load(configs.gpt, map_location="cpu")
@@ -344,7 +339,6 @@ def load_models():
     }
     total = sum([param.nelement() for param in t2s_model.parameters()])
     print("Number of parameter: %.2fM" % (total / 1e6))
-    bar.update(5)
 
 
 def load_configs():
@@ -394,10 +388,10 @@ def load_configs():
         os._exit(e.code)
 
 
-def pcm16_header(rate, data):
+def pcm16_header(rate, size=1000000000, channels=1):
     # Header for 16-bit PCM, modify from scipy.io.wavfile.write
     fs = rate
-    size = data.nbytes  # length * sizeof(nint16)
+    # size = data.nbytes  # length * sizeof(nint16)
 
     header_data = b"RIFF"
     header_data += struct.pack("i", size + 44)
@@ -406,11 +400,7 @@ def pcm16_header(rate, data):
     # fmt chunk
     header_data += b"fmt "
     format_tag = 1  # PCM
-    if data.ndim == 1:
-        channels = 1
-    else:
-        channels = data.shape[1]
-    bit_depth = data.dtype.itemsize * 8
+    bit_depth = 2 * 8  # 2 bytes
     bytes_per_second = fs * (bit_depth // 8) * channels
     block_align = channels * (bit_depth // 8)
     fmt_chunk_data = struct.pack("<HHIIHH", format_tag, channels, fs, bytes_per_second, block_align, bit_depth)
@@ -430,6 +420,9 @@ def load_text(filename):
 
 @app.route("/")
 def main():
+    global model_mappings
+    hps = model_mappings["hps"]
+
     text = request.args.get("text", type=str)
     if not text:
         return Response("Param `text` is required", 400)
@@ -448,13 +441,7 @@ def main():
     }
     pprint(params)
 
-    def generate():
-        rate, adata = inference(**params)
-        scaled_data = np.int16(adata / np.max(np.abs(adata)) * 32767)
-        yield pcm16_header(rate, scaled_data)
-        yield scaled_data.tobytes()
-
-    return generate(), {"Content-Type": "audio/x-wav"}
+    return inference(**params), {"Content-Type": "audio/x-wav"}
 
 
 if __name__ == "__main__":
