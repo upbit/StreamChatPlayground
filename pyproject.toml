@@ -5,14 +5,19 @@ description = "Yet Another Chat Playground for Large Language Models (with LangC
 authors = [
     {name = "Hao Zhou", email = "rmusique@gmail.com"},
 ]
+
 dependencies = [
     "streamlit>=1.30.0",
     "zhipuai>=2.0.1",
     "python-dotenv>=1.0.0",
     "openai>=1.0.0",
-    "langchain>=0.1.1",
+    "playwright>=1.0.0",
+    "ipykernel>=6.0.0",
+    "metagpt>=0.7.0",
+    "langchain",
 ]
-requires-python = "!=3.9.7,>=3.9"
+
+requires-python = "!=3.9.7,<3.13,>=3.9"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 
