@@ -15,6 +15,7 @@ dependencies = [
     "ipykernel>=6.0.0",
     "metagpt>=0.7.0",
     "langchain",
+    "pip>=24.0",
 ]
 
 requires-python = "!=3.9.7,<3.13,>=3.9"
