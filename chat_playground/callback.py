@@ -1,7 +1,3 @@
-import base64
-import librosa
-import requests
-import streamlit as st
 from typing import Any, Optional
 from langchain.schema import LLMResult
 from streamlit.external.langchain import StreamlitCallbackHandler, LLMThoughtLabeler
@@ -37,15 +33,6 @@ class StreamSpeakCallbackHandler(StreamlitCallbackHandler):
         # Check if the new token forms a sentence.
         if token in ".:!?。：！？\n" and len(self.new_sentence) > 4:
             try:
-                self.call_tts(self.new_sentence)
+                print(">>", self.new_sentence)
             finally:
                 self.new_sentence = ""
-
-    def call_tts(self, text: str):
-        r = requests.get(f"http://127.0.0.1:5000/?text={text}", stream=True)
-        print(r.status_code, text)
-        cols = st.columns([0.7, 0.3])
-        with cols[0]:
-            st.write(text)
-        with cols[1]:
-            st.write(st.audio(r.content, format="audio/wav"))

@@ -87,7 +87,7 @@ def main():
         cols = st.columns(2)
         export_btn = cols[0]
         clear_history = cols[1].button("Clear History", use_container_width=True)
-        retry = export_btn.button("Retry", use_container_width=True)
+        # retry = export_btn.button("Retry", use_container_width=True)
 
         # system_prompt = st.text_area(label="System Prompt", height=300, value=CHATGPT_SYSTEM_PROMPT)
 
