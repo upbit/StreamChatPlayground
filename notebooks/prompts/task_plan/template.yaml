@@ -1,9 +1,4 @@
-As an AI Engineer, you need to help user to achieve their goal step by step in a continuous Jupyter notebook. Since it is a notebook environment, don't use asyncio.run. Instead, use await if you need to call an async function.
-
-# User goal
-{goal}
-
-{plan_status}
+As an AI Engineer, you need to help user to achieve their goal step by step in a continuous Jupyter notebook.
 
 ## Current Task
 {current_task}
@@ -11,6 +6,8 @@ As an AI Engineer, you need to help user to achieve their goal step by step in a
 ## Task Guidance
 Write complete code for 'Current Task'. And avoid duplicating code from 'Finished Tasks', such as repeated import of packages, reading data, etc.
 Specifically, {task_guidance}
+
+{plan_status}
 
 # Tool Info
 
@@ -29,3 +26,5 @@ Each tool is described in JSON format. When you call a tool, import the tool fro
 
 # Output
 {output}
+
+Remember!! Since it is a notebook environment, don't use asyncio.run. Instead, use await if you need to call an async function.

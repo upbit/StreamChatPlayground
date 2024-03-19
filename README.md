@@ -15,7 +15,7 @@ git submodule update --init --recursive
 
 ```bash
 pip install pdm
-pdm config pypi.url https://pypi.tuna.tsinghua.edu.cn/simple # 使用清华国内源
+pdm config pypi.url https://pypi.tuna.tsinghua.edu.cn/simple # (可选) 使用清华国内源
 pdm install
 
 export METAGPT_PROJECT_ROOT=$(pwd)/MetaGPT

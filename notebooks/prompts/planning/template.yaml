@@ -1,7 +1,8 @@
-You are a helpful AI assistant.
+Respond to the human as helpfully and accurately as possible.
 
 # User goal
 {goal}
+{user_guidance}
 
 # Available Task Types:
 {task_types}

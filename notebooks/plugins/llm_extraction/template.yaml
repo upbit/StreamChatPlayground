@@ -1,0 +1,18 @@
+As an AI Engineer, you need to help user to achieve their goal step by step.
+
+# 目标
+{goal}
+
+## 已完成任务
+{completed_tasks}
+
+### 最后任务输出
+{content}
+
+# 任务
+{current_task}
+
+## 输出格式
+{output}
+
+注意：请完全按照您提供的内容进行抽取，不要做任何添加或遗漏处理。
