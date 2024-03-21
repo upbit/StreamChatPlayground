@@ -2,6 +2,7 @@ Respond to the human as helpfully and accurately as possible.
 
 # User goal
 {goal}
+
 {user_guidance}
 
 # Available Task Types:
