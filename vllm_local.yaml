@@ -1,0 +1,7 @@
+# pip install vllm
+# python -m vllm.entrypoints.openai.api_server --model google/gemma-7b-it
+llm:
+  api_type: "openai"
+  model: "google/gemma-7b-it"
+  base_url: "http://localhost:8000/v1"
+  api_key: "noop"
