@@ -5,3 +5,4 @@ llm:
   model: "google/gemma-7b-it"
   base_url: "http://localhost:8000/v1"
   api_key: "noop"
+  temperature: 0.3

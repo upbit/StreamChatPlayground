@@ -1,6 +1,6 @@
 [submodule "MetaGPT"]
 	path = MetaGPT
 	url = https://github.com/geekan/MetaGPT.git
-[submodule "gpt-pilot"]
-	path = gpt-pilot
-	url = https://github.com/Pythagora-io/gpt-pilot.git
+[submodule "interpreter"]
+	path = interpreter
+	url = https://github.com/OpenInterpreter/open-interpreter.git
