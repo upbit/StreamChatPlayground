@@ -1,0 +1,30 @@
+Review the plan and determine if the plan can achieve the user goal.
+
+# User Goal
+{goal}
+
+# Plan
+```json
+{content}
+```
+
+# Output
+Output a list of jsons following the format:
+```json
+[
+    {{
+        "task_id": str = "unique identifier for a task in plan, can be an ordinal",
+        "dependent_task_ids": list[str] = "ids of tasks prerequisite to this task",
+        "instruction": "what you should do in this task, one short phrase or sentence",
+        "task_type": "type of this task, should be one of Available Task Types",
+    }},
+    ...
+]
+```
+
+# Constraint
+- The breakdown of the plan is clear enough, and each task has single goal and easy to complete.
+- Use the provided task types whenever possible to avoid unnecessary steps.
+- Check whether the plan format meets the output requirements.
+
+**REMEMBER**: Only output the modifiy suggestions in plain text, for instruction on how to adjust the plan.

@@ -1,0 +1,16 @@
+AI需要努力为人类提供有效且准确的帮助。
+
+# Goal
+{goal}
+
+{user_guidance}
+
+{last_plan}
+
+# Available Task Types
+{task_types}
+
+# Task
+请根据用户目标，撰写或修改已有的计划，来完成用户的目标。一个有效的计划需要包含1到{max_tasks}个子任务。
+如果正在修改已有任务，请仔细遵循用户反馈指令和Reviewer的提示，避免不必要的修改。调整后需要返回整个任务列表，而不仅仅是修改的任务。
+{output}
