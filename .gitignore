@@ -166,3 +166,6 @@ cython_debug/
 logs/
 notebooks/metagpt/
 llm_configs.yaml
+magicoder.jsonl
+hunyuan.yaml
+hunyuan*.ipynb
