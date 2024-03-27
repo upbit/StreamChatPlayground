@@ -4,3 +4,6 @@
 [submodule "interpreter"]
 	path = interpreter
 	url = https://github.com/OpenInterpreter/open-interpreter.git
+[submodule "SWE_bench"]
+	path = SWE_bench
+	url = https://github.com/princeton-nlp/SWE-bench.git
