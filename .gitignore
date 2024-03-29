@@ -167,5 +167,6 @@ logs/
 notebooks/metagpt/
 llm_configs.yaml
 magicoder.jsonl
+.pdm-python
 hunyuan.yaml
 hunyuan*.ipynb
