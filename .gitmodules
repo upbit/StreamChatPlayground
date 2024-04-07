@@ -10,3 +10,6 @@
 [submodule "langgraph"]
 	path = langgraph
 	url = https://github.com/langchain-ai/langgraph.git
+[submodule "AgentBench"]
+	path = AgentBench
+	url = https://github.com/THUDM/AgentBench
