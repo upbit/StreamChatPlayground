@@ -1,7 +1,8 @@
 llm:
   api_type: "openai"
-  model: "gemma-7b-it"
+  # model: "gemma-7b-it"
   # model: "CapybaraHermes-2.5-Mistral-7B-AWQ"
+  model: "qwen1_5-32b-chat"
   base_url: "http://localhost:8000/v1"
   api_key: "noop"
   temperature: 0.1
