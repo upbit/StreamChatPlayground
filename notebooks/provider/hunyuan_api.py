@@ -21,15 +21,16 @@ HUNYUAN_DEFAULT_TIMEOUT = 3000
 # @register_provider([LLMType.HUNYUAN])
 class HunyuanAPI(BaseLLM):
 
-    def __init__(self, config: LLMConfig):
+    def __init__(self, config: LLMConfig, **kwargs):
         self.__init_hunyuan(config)
         self.client = GeneralAPIRequestor(base_url=config.base_url)
         self.config = config
         self.suffix_url = "/openapi/chat/completions"
         self.http_method = "post"
-        self.use_system_prompt = False
+        self.use_system_prompt = True
         self.cost_manager = TokenCostManager()
         self.wsid = "10103"
+        self.kwargs = kwargs
 
     def __init_hunyuan(self, config: LLMConfig):
         assert config.api_key, "api_key is required!"
@@ -41,14 +42,13 @@ class HunyuanAPI(BaseLLM):
             "model": self.model,
             "query_id": "test_query_id_" + str(uuid.uuid4()),
             "messages": messages,
-            "temperature": 1,
-            "top_p": 0.8,
-            "top_k": 40,
             "repetition_penalty": 1,
             "output_seq_len": 1024,
             "max_input_seq_len": 2048,
             "stream": stream,
         }
+        for k, v in self.kwargs.items():
+            kwargs[k] = v
         return kwargs
 
     def _default_headers(self) -> dict:
@@ -98,6 +98,9 @@ class HunyuanAPI(BaseLLM):
         collected_content = []
         usage = {}
         async for chunk in AsyncSSEClient(stream_resp).stream():
+            if chunk.get('error', None):
+                raise Exception(json.dumps(chunk))
+
             content = chunk["choices"][0]
             if content.get("finish_reason", None) == "stop":
                 usage = self.get_usage(chunk)
