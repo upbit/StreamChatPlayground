@@ -24,8 +24,6 @@ from loguru import logger as cron_logger
 class Recognizer(object):
     def __init__(self, label_list, task_name, model_dir=None):
         if not model_dir:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            model_dir = os.path.join(current_dir, "models")
             model_file_path = os.path.join(model_dir, task_name + ".onnx")
             if not os.path.exists(model_file_path):
                 model_dir = snapshot_download(repo_id="InfiniFlow/deepdoc")

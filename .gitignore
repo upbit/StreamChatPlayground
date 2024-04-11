@@ -171,3 +171,5 @@ magicoder.jsonl
 hunyuan.yaml
 hunyuan*.ipynb
 notebooks/pdf_utils/deepdoc/models
+notebooks/pdf_utils/deepdoc/huqie.txt.trie
+notebooks/workspace/temp/

@@ -475,16 +475,11 @@ class TextDetector(object):
 class OCR(object):
     def __init__(self, model_dir=None):
         if not model_dir:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            model_dir = os.path.join(current_dir, "models")
             try:
                 self.text_detector = TextDetector(model_dir)
                 self.text_recognizer = TextRecognizer(model_dir)
             except Exception as e:
-                cron_logger.warning("Trying to download models from huggingface_hub...")
-                model_dir = snapshot_download(
-                    repo_id="InfiniFlow/deepdoc", local_dir=model_dir
-                )
+                model_dir = snapshot_download(repo_id="InfiniFlow/deepdoc")
                 self.text_detector = TextDetector(model_dir)
                 self.text_recognizer = TextRecognizer(model_dir)
 
