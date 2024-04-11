@@ -170,3 +170,4 @@ magicoder.jsonl
 .pdm-python
 hunyuan.yaml
 hunyuan*.ipynb
+notebooks/pdf_utils/deepdoc/models
