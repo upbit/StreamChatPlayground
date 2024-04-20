@@ -10,6 +10,7 @@ import json
 from metagpt.configs.llm_config import LLMConfig, LLMType
 from metagpt.logs import log_llm_stream
 from metagpt.provider.base_llm import BaseLLM
+
 # from metagpt.provider.llm_provider_registry import register_provider
 from metagpt.utils.cost_manager import TokenCostManager
 
@@ -17,6 +18,7 @@ from metagpt.provider.general_api_requestor import GeneralAPIRequestor
 from metagpt.provider.zhipuai.async_sse_client import AsyncSSEClient
 
 HUNYUAN_DEFAULT_TIMEOUT = 3000
+
 
 # @register_provider([LLMType.HUNYUAN])
 class HunyuanAPI(BaseLLM):
@@ -53,8 +55,10 @@ class HunyuanAPI(BaseLLM):
 
     def _default_headers(self) -> dict:
         return {
-            "Connection": "keep-alive", 'Authorization': 'Bearer '+self.config.api_key, "Wsid": self.wsid,
-                }
+            "Connection": "keep-alive",
+            "Authorization": "Bearer " + self.config.api_key,
+            "Wsid": self.wsid,
+        }
 
     def get_choice_text(self, resp: dict) -> str:
         """get the resp content from llm response"""
@@ -69,7 +73,9 @@ class HunyuanAPI(BaseLLM):
         chunk = chunk.decode(encoding)
         return json.loads(chunk)
 
-    async def _achat_completion(self, messages: list[dict], timeout: int = HUNYUAN_DEFAULT_TIMEOUT) -> dict:
+    async def _achat_completion(
+        self, messages: list[dict], timeout: int = HUNYUAN_DEFAULT_TIMEOUT
+    ) -> dict:
         resp, _, _ = await self.client.arequest(
             method=self.http_method,
             url=self.suffix_url,
@@ -82,10 +88,14 @@ class HunyuanAPI(BaseLLM):
         self._update_costs(usage)
         return resp
 
-    async def acompletion(self, messages: list[dict], timeout=HUNYUAN_DEFAULT_TIMEOUT) -> dict:
+    async def acompletion(
+        self, messages: list[dict], timeout=HUNYUAN_DEFAULT_TIMEOUT
+    ) -> dict:
         return await self._achat_completion(messages, timeout=self.get_timeout(timeout))
 
-    async def _achat_completion_stream(self, messages: list[dict], timeout: int = HUNYUAN_DEFAULT_TIMEOUT) -> AsyncSSEClient:
+    async def _achat_completion_stream(
+        self, messages: list[dict], timeout: int = HUNYUAN_DEFAULT_TIMEOUT
+    ) -> AsyncSSEClient:
         stream_resp, _, _ = await self.client.arequest(
             method=self.http_method,
             url=self.suffix_url,
@@ -98,7 +108,7 @@ class HunyuanAPI(BaseLLM):
         collected_content = []
         usage = {}
         async for chunk in AsyncSSEClient(stream_resp).stream():
-            if chunk.get('error', None):
+            if chunk.get("error", None):
                 raise Exception(json.dumps(chunk))
 
             content = chunk["choices"][0]
@@ -106,7 +116,7 @@ class HunyuanAPI(BaseLLM):
                 usage = self.get_usage(chunk)
                 break
             data = self.get_choice_text(content)
-            if not data: # 可能是role类的无content返回，跳过
+            if not data:  # 可能是role类的无content返回，跳过
                 continue
 
             collected_content.append(data)
